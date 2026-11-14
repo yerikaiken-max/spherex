@@ -1,8 +1,9 @@
 'use client';
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-
-export const LANGS = ['kk', 'ru', 'en'];
-export const LOCALES = { kk: 'kk-KZ', ru: 'ru-RU', en: 'en-US' };
+import FactsTicker from "./FactsTicker";
+import InfoMenu from "./InfoMenu";
+import AssistantWidget from "./AssistantWidget";
+import { TARGET_INFO } from "./targetInfo";
 
 /* ------------------------------------------------------------------ */
 /*  Словари. Добавляйте сюда все строки интерфейса: t('ключ')           */

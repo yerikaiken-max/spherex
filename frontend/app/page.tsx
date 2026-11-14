@@ -1,297 +1,675 @@
-'use client';
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+"use client";
+
+import React, { useState, useEffect, useRef, useMemo, Suspense } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { OrbitControls, Stars, Html, Line } from "@react-three/drei";
+import * as THREE from "three";
+import { useSearchParams, useRouter } from "next/navigation";
+import {
+  Play, Pause, Search, Layers, Activity, Share2, Eye, Sparkles,
+  AlertTriangle, Compass, Download, Flag, Sliders, Crosshair,
+  TrendingUp, CheckCircle2, Radio,
+} from "lucide-react";
 import FactsTicker from "./FactsTicker";
 import InfoMenu from "./InfoMenu";
 import AssistantWidget from "./AssistantWidget";
 import { TARGET_INFO } from "./targetInfo";
 
-/* ------------------------------------------------------------------ */
-/*  Словари. Добавляйте сюда все строки интерфейса: t('ключ')           */
-/*  Каждый ключ должен быть во всех трёх языках — тогда языки не        */
-/*  смешиваются.                                                        */
-/* ------------------------------------------------------------------ */
-const DICT = {
-  ru: {
-    'subtitle': 'Инфракрасный таймлапс всего неба и платформа открытий для всех',
-    'search': 'Искать',
-    'share': 'Поделиться',
-    'type.brownDwarf': 'Коричневый карлик',
-    'type.highMotion': 'Быстрое движение',
-    'type.binaryDwarf': 'Двойной карлик',
-    'type.variable': 'Переменная звезда',
-    'type.miraPulsator': 'Пульсирующая звезда',
-    'coords': 'Координаты на небе',
-    'modes': 'Режимы анализа',
-    'imageSubtraction': 'Сравнение снимков',
-    'catalogs': 'Каталоги звёзд (Gaia, WISE)',
-    'motionVectors': 'Стрелки движения',
-    'on': 'ВКЛ',
-    'off': 'ВЫКЛ',
-    'fov': 'Размер участка неба',
-    'lightCurve': 'Как менялась яркость',
-    'epoch': 'Снимок',
-    'pause': 'ПАУЗА',
-    'play': 'ИГРАТЬ',
-    'speed': 'Скорость',
-    'spectrometer': 'Спектрометр (102 цвета)',
-    'array': 'Диапазон',
-    'flagged': 'Что заметно здесь',
-    'discovery': 'Журнал открытий',
-    'exportJson': 'Скачать JSON',
-    'obj.movingAsteroid': 'Движущийся астероид / сближающийся с Землёй',
-    'obj.variable': 'Переменная звезда',
-    'obj.other': 'Другое',
-
-    'facts.title': 'Знаешь ли ты?',
-    'facts.next': 'Следующий факт',
-
-    'size.title': 'Размер',
-    'size.radius': 'Радиус',
-    'size.approx': 'приблизительно',
-    'size.same': 'почти как Земля',
-    'size.larger': '{name} больше Земли в {n} {times}',
-    'size.smaller': '{name} меньше Земли в {n} {times}',
-    'size.km': '≈ {km} км',
-    'atm.title': 'Из чего состоит атмосфера',
-    'atm.star': 'Из чего состоит внешний слой',
-    'temp': 'Температура',
-    'spec.title': 'Как это связано со спектрометром',
-    'spec.what': 'Спектрометр — это «призма» для света. Он раскладывает свет объекта на цвета, как радугу. SPHEREx видит 102 инфракрасных цвета, которых не видит глаз. У каждого вещества свой «отпечаток»: оно поглощает свет в определённых цветах. Так по свету можно узнать, из чего состоит объект, не долетая до него.',
-    'spec.link': 'Вот что SPHEREx ищет у этого объекта:',
-    'spec.row': '{um} мкм — {mol}',
-    'spec.dip': 'Провал на графике в этом месте значит: вещество есть. Чем глубже провал, тем его больше.',
-    'sources': 'Источники',
-
-    'motion.title': 'Как двигался объект',
-    'motion.sentence': 'С {from} по {to} ({duration}) объект сместился на небе на {dist}″ — в сторону {dir}.',
-    'motion.moon': 'Это примерно 1/{n} ширины Луны на небе.',
-    'motion.arcsec': '″ — угловая секунда: 1/3600 градуса.',
-    'motion.none': 'За выбранный период заметного движения нет.',
-    'motion.start': 'Нужно выбрать хотя бы второй снимок.',
-    'dir.east': 'востока', 'dir.west': 'запада', 'dir.north': 'севера', 'dir.south': 'юга',
-    'dir.and': ' и ',
-
-    'ai.open': 'ИИ-помощник',
-    'ai.hint': 'Нажми два раза на элемент, который тебе непонятен',
-    'ai.title': 'ИИ-помощник',
-    'ai.close': 'Закрыть',
-    'ai.empty': 'Дважды нажми на любую кнопку, график или надпись — и спроси, что это.',
-    'ai.selected': 'Выбрано: «{label}». Что ты хочешь узнать?',
-    'ai.placeholder': 'Например: что это значит?',
-    'ai.send': 'Спросить',
-    'ai.thinking': 'Думаю…',
-    'ai.offline': 'ИИ сейчас недоступен. Вот короткое пояснение:',
-    'ai.noInfo': 'ИИ сейчас недоступен, попробуй чуть позже.',
-    'unit.day.one': 'день', 'unit.day.few': 'дня', 'unit.day.many': 'дней',
-    'unit.year.one': 'год', 'unit.year.few': 'года', 'unit.year.many': 'лет',
-    'unit.times.one': 'раз', 'unit.times.few': 'раза', 'unit.times.many': 'раз',
-  },
-
-  kk: {
-    'subtitle': 'Бүкіл аспанның инфрақызыл таймлапсы және барлығына арналған ашылулар платформасы',
-    'search': 'Іздеу',
-    'share': 'Бөлісу',
-    'type.brownDwarf': 'Қоңыр карлик',
-    'type.highMotion': 'Жылдам қозғалыс',
-    'type.binaryDwarf': 'Қос карлик',
-    'type.variable': 'Айнымалы жұлдыз',
-    'type.miraPulsator': 'Пульсациялайтын жұлдыз',
-    'coords': 'Аспандағы координаттар',
-    'modes': 'Талдау режимдері',
-    'imageSubtraction': 'Суреттерді салыстыру',
-    'catalogs': 'Жұлдыз каталогтары (Gaia, WISE)',
-    'motionVectors': 'Қозғалыс бағыттары',
-    'on': 'ҚОСУЛЫ',
-    'off': 'ӨШІРУЛІ',
-    'fov': 'Аспан бөлігінің өлшемі',
-    'lightCurve': 'Жарықтық қалай өзгерді',
-    'epoch': 'Түсірілім',
-    'pause': 'ПАУЗА',
-    'play': 'ОЙНАТУ',
-    'speed': 'Жылдамдық',
-    'spectrometer': 'Спектрометр (102 түс)',
-    'array': 'Диапазон',
-    'flagged': 'Мұнда не байқалады',
-    'discovery': 'Ашулар журналы',
-    'exportJson': 'JSON жүктеу',
-    'obj.movingAsteroid': 'Қозғалатын астероид / Жерге жақындайтын',
-    'obj.variable': 'Айнымалы жұлдыз',
-    'obj.other': 'Басқа',
-
-    'facts.title': 'Білесің бе?',
-    'facts.next': 'Келесі дерек',
-
-    'size.title': 'Өлшемі',
-    'size.radius': 'Радиус',
-    'size.approx': 'шамамен',
-    'size.same': 'Жерге дерлік тең',
-    'size.larger': '{name} Жерден {n} есе үлкен',
-    'size.smaller': '{name} Жерден {n} есе кіші',
-    'size.km': '≈ {km} км',
-    'atm.title': 'Атмосферасы неден тұрады',
-    'atm.star': 'Сыртқы қабаты неден тұрады',
-    'temp': 'Температурасы',
-    'spec.title': 'Спектрометрмен байланысы қандай',
-    'spec.what': 'Спектрометр — жарыққа арналған «призма». Ол заттан келген жарықты кемпірқосақ сияқты түстерге жіктейді. SPHEREx көз көрмейтін 102 инфрақызыл түсті көреді. Әр заттың өз «таңбасы» бар: ол жарықты белгілі бір түстерде жұтады. Осылайша объектіге ұшып бармай-ақ, оның неден тұратынын білуге болады.',
-    'spec.link': 'SPHEREx осы объектіден мынаны іздейді:',
-    'spec.row': '{um} мкм — {mol}',
-    'spec.dip': 'Графиктегі осы жердегі ойыс — зат бар дегенді білдіреді. Ойыс терең болған сайын, зат көп.',
-    'sources': 'Дереккөздер',
-
-    'motion.title': 'Объект қалай қозғалды',
-    'motion.sentence': '{from} мен {to} аралығында ({duration}) объект аспанда {dist}″ жылжыды — бағыты: {dir}.',
-    'motion.moon': 'Бұл аспандағы Ай енінің шамамен 1/{n} бөлігі.',
-    'motion.arcsec': '″ — бұрыштық секунд: градустың 1/3600 бөлігі.',
-    'motion.none': 'Таңдалған кезеңде байқалатын қозғалыс жоқ.',
-    'motion.start': 'Кемінде екінші түсірілімді таңдаңыз.',
-    'dir.east': 'шығыс', 'dir.west': 'батыс', 'dir.north': 'солтүстік', 'dir.south': 'оңтүстік',
-    'dir.and': ' және ',
-
-    'ai.open': 'ЖИ-көмекші',
-    'ai.hint': 'Түсініксіз элементті екі рет басыңыз',
-    'ai.title': 'ЖИ-көмекші',
-    'ai.close': 'Жабу',
-    'ai.empty': 'Кез келген батырманы, графикті немесе жазуды екі рет басып, не екенін сұраңыз.',
-    'ai.selected': 'Таңдалды: «{label}». Не білгіңіз келеді?',
-    'ai.placeholder': 'Мысалы: бұл нені білдіреді?',
-    'ai.send': 'Сұрау',
-    'ai.thinking': 'Ойланып жатырмын…',
-    'ai.offline': 'ЖИ қазір қолжетімсіз. Қысқаша түсініктеме:',
-    'ai.noInfo': 'ЖИ қазір қолжетімсіз, сәлден кейін қайталап көріңіз.',
-    'unit.day.one': 'күн', 'unit.day.few': 'күн', 'unit.day.many': 'күн',
-    'unit.year.one': 'жыл', 'unit.year.few': 'жыл', 'unit.year.many': 'жыл',
-    'unit.times.one': 'есе', 'unit.times.few': 'есе', 'unit.times.many': 'есе',
-  },
-
-  en: {
-    'subtitle': 'All-Sky Infrared Time-Lapse & Citizen Discovery Platform',
-    'search': 'Search',
-    'share': 'Share',
-    'type.brownDwarf': 'Brown dwarf',
-    'type.highMotion': 'High motion',
-    'type.binaryDwarf': 'Binary dwarf',
-    'type.variable': 'Variable star',
-    'type.miraPulsator': 'Mira pulsator',
-    'coords': 'Sky coordinates',
-    'modes': 'Analysis modes',
-    'imageSubtraction': 'Compare images',
-    'catalogs': 'Star catalogs (Gaia, WISE)',
-    'motionVectors': 'Motion arrows',
-    'on': 'ON',
-    'off': 'OFF',
-    'fov': 'Size of the sky patch',
-    'lightCurve': 'How brightness changed',
-    'epoch': 'Snapshot',
-    'pause': 'PAUSE',
-    'play': 'PLAY',
-    'speed': 'Speed',
-    'spectrometer': 'Spectrometer (102 colors)',
-    'array': 'Range',
-    'flagged': 'What stands out here',
-    'discovery': 'Discovery log',
-    'exportJson': 'Download JSON',
-    'obj.movingAsteroid': 'Moving asteroid / near-Earth object',
-    'obj.variable': 'Variable star',
-    'obj.other': 'Other',
-
-    'facts.title': 'Did you know?',
-    'facts.next': 'Next fact',
-
-    'size.title': 'Size',
-    'size.radius': 'Radius',
-    'size.approx': 'approximate',
-    'size.same': 'about the same as Earth',
-    'size.larger': '{name} is {n} {times} larger than Earth',
-    'size.smaller': '{name} is {n} {times} smaller than Earth',
-    'size.km': '≈ {km} km',
-    'atm.title': 'What the atmosphere is made of',
-    'atm.star': 'What the outer layer is made of',
-    'temp': 'Temperature',
-    'spec.title': 'How this connects to the spectrometer',
-    'spec.what': 'A spectrometer is a “prism” for light. It splits an object’s light into colors, like a rainbow. SPHEREx sees 102 infrared colors that your eyes cannot. Every substance has its own “fingerprint”: it absorbs light at certain colors. That is how we learn what an object is made of without ever going there.',
-    'spec.link': 'Here is what SPHEREx looks for in this object:',
-    'spec.row': '{um} µm — {mol}',
-    'spec.dip': 'A dip in the graph at this spot means the substance is there. The deeper the dip, the more of it.',
-    'sources': 'Sources',
-
-    'motion.title': 'How the object moved',
-    'motion.sentence': 'From {from} to {to} ({duration}) the object shifted by {dist}″ across the sky — toward the {dir}.',
-    'motion.moon': 'That is about 1/{n} of the Moon’s width in the sky.',
-    'motion.arcsec': '″ is an arcsecond: 1/3600 of a degree.',
-    'motion.none': 'No noticeable movement in the chosen period.',
-    'motion.start': 'Pick at least the second snapshot.',
-    'dir.east': 'east', 'dir.west': 'west', 'dir.north': 'north', 'dir.south': 'south',
-    'dir.and': ' and ',
-
-    'ai.open': 'AI assistant',
-    'ai.hint': 'Double-click anything you don’t understand',
-    'ai.title': 'AI assistant',
-    'ai.close': 'Close',
-    'ai.empty': 'Double-click any button, chart or label — then ask what it is.',
-    'ai.selected': 'Selected: “{label}”. What would you like to know?',
-    'ai.placeholder': 'For example: what does this mean?',
-    'ai.send': 'Ask',
-    'ai.thinking': 'Thinking…',
-    'ai.offline': 'The AI is unavailable right now. Here is a short explanation:',
-    'ai.noInfo': 'The AI is unavailable right now, please try again later.',
-    'unit.day.one': 'day', 'unit.day.few': 'days', 'unit.day.many': 'days',
-    'unit.year.one': 'year', 'unit.year.few': 'years', 'unit.year.many': 'years',
-    'unit.times.one': 'time', 'unit.times.few': 'times', 'unit.times.many': 'times',
-  },
-};
-
-/* Выбор формы слова: ru — 3 формы, en — 2, kk — одна */
-export function pluralKey(lang, n) {
-  const i = Math.abs(Math.floor(n));
-  if (lang === 'ru') {
-    const m10 = i % 10, m100 = i % 100;
-    if (n !== i) return 'few';              // дробные: «1,5 раза»
-    if (m10 === 1 && m100 !== 11) return 'one';
-    if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return 'few';
-    return 'many';
-  }
-  if (lang === 'en') return n === 1 ? 'one' : 'many';
-  return 'one';
+interface EpochData {
+  epoch_index: number;
+  date: string;
+  dx: number;
+  dy: number;
+  brightness: number;
+  contamination_flag: string;
 }
 
-const I18nContext = createContext(null);
+interface SpectrumPoint {
+  band: number;
+  wavelength: number;
+  flux: number;
+}
 
-export function LanguageProvider({ children, defaultLang = 'ru' }) {
-  const [lang, setLangState] = useState(defaultLang);
+interface SkyResponse {
+  coordinates: { ra_str: string; dec_str: string; ra_deg: number; dec_deg: number; fov: number };
+  object_info: { name: string; type: string; chem_signature: string };
+  epochs: EpochData[];
+  spectrum_102: SpectrumPoint[];
+}
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('spherex-lang');
-      if (LANGS.includes(saved)) setLangState(saved);
-    } catch {}
+interface DiscoveryEntry {
+  id: string;
+  timestamp: string;
+  ra: string;
+  dec: string;
+  category: string;
+  band: number;
+}
+
+const PRESETS = [
+  { label: "WISE 0855", tag: "Brown Dwarf", ra: "08h55m10.831s", dec: "-7d14m42.53s" },
+  { label: "Barnard's Star", tag: "High Motion", ra: "17h57m48.498s", dec: "+04d41m36.11s" },
+  { label: "Epsilon Indi B", tag: "Brown Dwarf", ra: "22h04m10.52s", dec: "-56d46m57.7s" },
+  { label: "RW Aurigae", tag: "Variable", ra: "05h07m49.54s", dec: "+30d24m05.1s" },
+  { label: "R Draconis", tag: "Mira Variable", ra: "16h32m40.23s", dec: "+66d45m17.9s" },
+];
+
+// The six SPHEREx detector arrays (0.75 - 5.0 micrometers)
+const DETECTOR_ARRAYS = [
+  { id: 1, name: "Array 1", range: "0.75–1.11 μm", bands: [1, 17], molecule: "Stellar continuum" },
+  { id: 2, name: "Array 2", range: "1.11–1.64 μm", bands: [18, 34], molecule: "H₂O ice (1.4 μm)" },
+  { id: 3, name: "Array 3", range: "1.64–2.42 μm", bands: [35, 51], molecule: "H₂O / hydrides" },
+  { id: 4, name: "Array 4", range: "2.42–3.82 μm", bands: [52, 68], molecule: "H₂O ice (3.05 μm) & CH₄" },
+  { id: 5, name: "Array 5", range: "3.82–4.42 μm", bands: [69, 85], molecule: "CO₂ ice (4.26 μm)" },
+  { id: 6, name: "Array 6", range: "4.42–5.00 μm", bands: [86, 102], molecule: "CO gas / silicates" },
+];
+
+function SkyPatchScene({
+  currentEpoch, previousEpoch, allEpochs, subtractionMode, gaiaOverlay, showVectors, fov, activeBand,
+}: {
+  currentEpoch: EpochData;
+  previousEpoch: EpochData;
+  allEpochs: EpochData[];
+  subtractionMode: boolean;
+  gaiaOverlay: boolean;
+  showVectors: boolean;
+  fov: number;
+  activeBand: number;
+}) {
+  const targetRef = useRef<THREE.Mesh>(null);
+  const haloRef = useRef<THREE.Mesh>(null);
+
+  // Decorative background stars (not real catalog data yet)
+  const staticStars = useMemo(() => {
+    const items = [];
+    for (let i = 0; i < 160; i++) {
+      items.push({
+        x: ((Math.sin(i * 12.9898) * 43758.5453) % 1 - 0.5) * 16,
+        y: ((Math.cos(i * 78.233) * 23421.631) % 1 - 0.5) * 12,
+        z: -2 - (i % 6),
+        size: 0.035 + (i % 5) * 0.018,
+        tempColor: i % 3 === 0 ? "#93c5fd" : i % 3 === 1 ? "#fde68a" : "#e2e8f0",
+      });
+    }
+    return items;
   }, []);
 
-  useEffect(() => {
-    document.documentElement.lang = lang;
-  }, [lang]);
+  // Path of the object across all epochs
+  const trajectoryPoints = useMemo(() => {
+    if (!allEpochs || allEpochs.length === 0) return [];
+    return allEpochs.map((ep) => new THREE.Vector3((ep.dx * 3.5) / fov, (ep.dy * 3.5) / fov, 0.05));
+  }, [allEpochs, fov]);
 
-  const setLang = useCallback((l) => {
-    setLangState(l);
-    try { localStorage.setItem('spherex-lang', l); } catch {}
-  }, []);
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    if (targetRef.current) {
+      targetRef.current.position.x = THREE.MathUtils.lerp(targetRef.current.position.x, (currentEpoch.dx * 3.5) / fov, 0.15);
+      targetRef.current.position.y = THREE.MathUtils.lerp(targetRef.current.position.y, (currentEpoch.dy * 3.5) / fov, 0.15);
+      const scale = currentEpoch.brightness * (1.15 / Math.sqrt(fov));
+      targetRef.current.scale.set(scale, scale, scale);
+    }
+    if (haloRef.current && targetRef.current) {
+      haloRef.current.position.copy(targetRef.current.position);
+      const pulse = 1 + Math.sin(t * 4) * 0.15;
+      haloRef.current.scale.set(pulse, pulse, pulse);
+    }
+  });
 
-  const t = useCallback((key, vars) => {
-    let s = DICT[lang]?.[key] ?? key; // НЕ подставляем другой язык — лучше увидеть ключ и исправить
-    if (vars) for (const k in vars) s = s.replaceAll(`{${k}}`, vars[k]);
-    return s;
-  }, [lang]);
-
-  const fmt = useCallback((n, digits = 1) =>
-    new Intl.NumberFormat(LOCALES[lang], { maximumFractionDigits: digits }).format(n), [lang]);
+  const bandColor = useMemo(() => {
+    const hue = 0.01 + (activeBand / 102) * 0.14;
+    return new THREE.Color().setHSL(hue, 0.95, 0.58);
+  }, [activeBand]);
 
   return (
-    <I18nContext.Provider value={{ lang, setLang, t, fmt }}>
-      {children}
-    </I18nContext.Provider>
+    <>
+      <color attach="background" args={["#02040a"]} />
+      <fog attach="fog" args={["#02040a", 12, 28]} />
+      <ambientLight intensity={0.45} />
+      <pointLight position={[6, 6, 6]} intensity={2.5} color="#818cf8" />
+
+      {!subtractionMode && <Stars radius={60} depth={35} count={2800} factor={3.5} fade speed={0.4} />}
+
+      {/* RA / Dec grid */}
+      <gridHelper args={[18, 18, "#1e293b", "#0b1120"]} rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -2.5]} />
+
+      {/* Background stars and catalog overlay */}
+      {!subtractionMode &&
+        staticStars.map((star, idx) => (
+          <group key={idx} position={[star.x / fov, star.y / fov, star.z]}>
+            <mesh>
+              <sphereGeometry args={[star.size / Math.sqrt(fov), 12, 12]} />
+              <meshBasicMaterial color={star.tempColor} />
+            </mesh>
+            {gaiaOverlay && idx % 5 === 0 && (
+              <mesh>
+                <ringGeometry args={[0.13, 0.16, 24]} />
+                <meshBasicMaterial color="#38bdf8" side={THREE.DoubleSide} />
+              </mesh>
+            )}
+          </group>
+        ))}
+
+      {/* Motion path */}
+      {showVectors && trajectoryPoints.length > 1 && (
+        <Line points={trajectoryPoints} color={subtractionMode ? "#fb7185" : "#34d399"} lineWidth={2} dashed dashScale={6} />
+      )}
+
+      {/* Position in the previous epoch */}
+      <mesh position={[(previousEpoch.dx * 3.5) / fov, (previousEpoch.dy * 3.5) / fov, 0]}>
+        <ringGeometry args={[0.18, 0.22, 32]} />
+        <meshBasicMaterial color={subtractionMode ? "#3b82f6" : "#64748b"} transparent opacity={0.75} side={THREE.DoubleSide} />
+      </mesh>
+
+      {/* Pulsing halo around the target */}
+      <mesh ref={haloRef}>
+        <ringGeometry args={[0.25, 0.3, 32]} />
+        <meshBasicMaterial color={subtractionMode ? "#ff2a5f" : "#f59e0b"} transparent opacity={0.45} side={THREE.DoubleSide} />
+      </mesh>
+
+      {/* The target itself */}
+      <mesh ref={targetRef} position={[0, 0, 0]}>
+        <sphereGeometry args={[0.18, 32, 32]} />
+        <meshStandardMaterial
+          color={subtractionMode ? "#ff2a5f" : bandColor}
+          emissive={subtractionMode ? "#ff2a5f" : bandColor}
+          emissiveIntensity={2.8}
+        />
+        <Html distanceFactor={8} position={[0.28, 0.28, 0]}>
+          <div className="px-2.5 py-1 text-[10px] font-mono bg-slate-950/90 border border-rose-500/70 text-rose-200 rounded shadow-lg whitespace-nowrap">
+            <span className="text-rose-400 font-bold">● TARGET</span> | {currentEpoch.date.split(" ")[0]} | Flux: {currentEpoch.brightness}x
+          </div>
+        </Html>
+      </mesh>
+
+      <OrbitControls enablePan enableZoom enableRotate maxDistance={16} minDistance={2} />
+    </>
   );
 }
 
-export const useI18n = () => useContext(I18nContext);
+function SpherexExplorerContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
-/* Текст объекта {kk, ru, en} → строка на текущем языке */
-export const pick = (obj, lang) => (obj && obj[lang]) || '';
+  const [ra, setRa] = useState(searchParams.get("ra") || "08h55m10.831s");
+  const [dec, setDec] = useState(searchParams.get("dec") || "-7d14m42.53s");
+  const [fov, setFov] = useState<number>(parseFloat(searchParams.get("fov") || "1.0") || 1.0);
+  const [data, setData] = useState<SkyResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [isDemo, setIsDemo] = useState(false);
+
+  const [epochIdx, setEpochIdx] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [playbackSpeed, setPlaybackSpeed] = useState(900);
+  const [subtractionMode, setSubtractionMode] = useState(false);
+  const [gaiaOverlay, setGaiaOverlay] = useState(true);
+  const [showVectors, setShowVectors] = useState(true);
+  const [activeBand, setActiveBand] = useState(58);
+  const [copied, setCopied] = useState(false);
+
+  const [discoveryCategory, setDiscoveryCategory] = useState("Moving asteroid / NEO");
+  const [discoveries, setDiscoveries] = useState<DiscoveryEntry[]>([]);
+
+  const fetchSkyData = async (targetRa: string, targetDec: string, targetFov: number) => {
+    setLoading(true);
+    router.replace(
+      `?ra=${encodeURIComponent(targetRa)}&dec=${encodeURIComponent(targetDec)}&fov=${targetFov}`
+    );
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+    try {
+      const res = await fetch(
+        `${apiUrl}/api/sky-patch?ra=${encodeURIComponent(targetRa)}&dec=${encodeURIComponent(targetDec)}&fov=${targetFov}`
+      );
+      if (!res.ok) throw new Error("Backend offline");
+      const json: SkyResponse = await res.json();
+      setData(json);
+      setIsDemo(false);
+    } catch {
+      // Demo data: shown only when the server is not reachable
+      const fallbackSpectrum: SpectrumPoint[] = Array.from({ length: 102 }, (_, i) => {
+        const wl = +(0.75 + (i * 4.25) / 101).toFixed(2);
+        const h2oDip = Math.abs(wl - 3.05) < 0.25 ? 0.45 : Math.abs(wl - 1.4) < 0.15 ? 0.3 : 0;
+        const co2Dip = Math.abs(wl - 4.26) < 0.18 ? 0.35 : 0;
+        return { band: i + 1, wavelength: wl, flux: +(1.0 - h2oDip - co2Dip + Math.sin(i * 0.4) * 0.06).toFixed(3) };
+      });
+      setData({
+        coordinates: { ra_str: targetRa, dec_str: targetDec, ra_deg: 133.795, dec_deg: -7.245, fov: targetFov },
+        object_info: {
+          name: `SPHEREx field (${targetRa})`,
+          type: "Demo data, server not connected",
+          chem_signature: "Demo spectrum",
+        },
+        epochs: [
+          { epoch_index: 0, date: "Epoch 1", dx: 0.0, dy: 0.0, brightness: 1.0, contamination_flag: "CLEAN" },
+          { epoch_index: 1, date: "Epoch 2", dx: 0.38, dy: -0.16, brightness: 1.18, contamination_flag: "CLEAN" },
+          { epoch_index: 2, date: "Epoch 3", dx: 0.76, dy: -0.32, brightness: 1.32, contamination_flag: "ZODIACAL_LIGHT_WARN" },
+          { epoch_index: 3, date: "Epoch 4", dx: 1.15, dy: -0.49, brightness: 1.12, contamination_flag: "CLEAN" },
+        ],
+        spectrum_102: fallbackSpectrum,
+      });
+      setIsDemo(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSkyData(ra, dec, fov);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!isPlaying || !data) return;
+    const timer = setInterval(() => {
+      setEpochIdx((prev) => (prev + 1) % data.epochs.length);
+    }, playbackSpeed);
+    return () => clearInterval(timer);
+  }, [isPlaying, data, playbackSpeed]);
+
+  const handleShareUrl = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleLogDiscovery = () => {
+    const newEntry: DiscoveryEntry = {
+      id: `NOTE-${discoveries.length + 1}`,
+      timestamp: new Date().toLocaleTimeString(),
+      ra,
+      dec,
+      category: discoveryCategory,
+      band: activeBand,
+    };
+    setDiscoveries([newEntry, ...discoveries]);
+  };
+
+  const handleExportReport = () => {
+    const report = {
+      mission: "NASA SPHEREx All-Sky Spectral Survey",
+      exported_at: new Date().toISOString(),
+      demo_data: isDemo,
+      target: data?.object_info,
+      coordinates: data?.coordinates,
+      logged_notes: discoveries,
+      epochs: data?.epochs,
+    };
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `SPHEREx_Report_${ra.replace(/[^a-zA-Z0-9]/g, "")}.json`;
+    a.click();
+  };
+
+  const currentEpoch = data?.epochs[epochIdx] || {
+    epoch_index: 0, date: "Epoch 1", dx: 0, dy: 0, brightness: 1, contamination_flag: "CLEAN",
+  };
+  const previousEpoch = data?.epochs[Math.max(0, epochIdx - 1)] || currentEpoch;
+  const activeSpectrumPoint = data?.spectrum_102[activeBand - 1];
+  const currentDetector =
+    DETECTOR_ARRAYS.find((d) => activeBand >= d.bands[0] && activeBand <= d.bands[1]) || DETECTOR_ARRAYS[0];
+
+  const svgSpectrumPoints = useMemo(() => {
+    if (!data?.spectrum_102) return "";
+    return data.spectrum_102
+      .map((pt, i) => {
+        const x = (i / 101) * 260;
+        const y = 75 - Math.min(70, Math.max(5, pt.flux * 55));
+        return `${x},${y}`;
+      })
+      .join(" ");
+  }, [data]);
+
+  const presetLabel = PRESETS.find((p) => p.ra === ra)?.label ?? null;
+  const targetInfo = presetLabel ? TARGET_INFO[presetLabel] : null;
+
+  return (
+    <div className="relative w-screen h-screen bg-[#02040a] text-slate-100 overflow-hidden font-sans select-none">
+      <FactsTicker />
+
+      {/* Sky view */}
+      <div className="absolute inset-0 z-0">
+        <Canvas camera={{ position: [0, 0, 7.2], fov: 48 }}>
+          <SkyPatchScene
+            currentEpoch={currentEpoch}
+            previousEpoch={previousEpoch}
+            allEpochs={data?.epochs || []}
+            subtractionMode={subtractionMode}
+            gaiaOverlay={gaiaOverlay}
+            showVectors={showVectors}
+            fov={fov}
+            activeBand={activeBand}
+          />
+        </Canvas>
+      </div>
+
+      {/* Top bar: coordinates and test targets */}
+      <header className="relative z-20 flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-slate-950/85 backdrop-blur-xl border-b border-slate-800/90 shadow-2xl">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-gradient-to-br from-indigo-600/30 to-rose-600/20 border border-indigo-400/40 text-indigo-300 shadow-inner">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-extrabold tracking-wider uppercase text-white">
+                SPHEREx <span className="text-indigo-400">CHRONOS</span>
+              </h1>
+              <span
+                className={`px-1.5 py-0.5 text-[9px] font-mono uppercase rounded border ${
+                  isDemo
+                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                    : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                }`}
+              >
+                {isDemo ? "Demo data" : "Server data"}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400">Watch the infrared sky change over time</p>
+          </div>
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            fetchSkyData(ra, dec, fov);
+          }}
+          className="flex flex-wrap items-center gap-2"
+        >
+          <div className="flex items-center bg-slate-900/90 border border-slate-700/90 rounded-lg px-2.5 py-1">
+            <Crosshair className="w-3.5 h-3.5 text-indigo-400 mr-1.5" />
+            <span className="text-[10px] font-mono text-slate-400 mr-1">RA:</span>
+            <input type="text" value={ra} onChange={(e) => setRa(e.target.value)}
+              className="w-28 text-xs font-mono bg-transparent text-white focus:outline-none" />
+          </div>
+
+          <div className="flex items-center bg-slate-900/90 border border-slate-700/90 rounded-lg px-2.5 py-1">
+            <span className="text-[10px] font-mono text-slate-400 mr-1">DEC:</span>
+            <input type="text" value={dec} onChange={(e) => setDec(e.target.value)}
+              className="w-28 text-xs font-mono bg-transparent text-white focus:outline-none" />
+          </div>
+
+          <button type="submit" disabled={loading}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-lg shadow-indigo-600/20 transition">
+            <Search className="w-3.5 h-3.5" />
+            {loading ? "Scanning..." : "Search"}
+          </button>
+
+          <button type="button" onClick={handleShareUrl} title="Copy link"
+            className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-slate-800/90 hover:bg-slate-700 border border-slate-700 rounded-lg transition">
+            <Share2 className="w-3.5 h-3.5 text-sky-400" />
+            {copied ? "Copied!" : "Share"}
+          </button>
+        </form>
+
+        <InfoMenu
+          name={presetLabel ?? "Custom field"}
+          info={targetInfo}
+          wavelength={activeSpectrumPoint?.wavelength}
+          detector={currentDetector.name}
+        />
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          {PRESETS.map((p) => {
+            const active = ra === p.ra;
+            return (
+              <button
+                key={p.label}
+                onClick={() => {
+                  setRa(p.ra);
+                  setDec(p.dec);
+                  fetchSkyData(p.ra, p.dec, fov);
+                }}
+                className={`px-2.5 py-1 text-[11px] rounded-lg border transition flex items-center gap-1.5 ${
+                  active
+                    ? "bg-indigo-600/30 border-indigo-400 text-white font-semibold"
+                    : "bg-slate-900/80 hover:bg-slate-800 border-slate-700/80 text-slate-300"
+                }`}
+              >
+                <span>{p.label}</span>
+                <span className="text-[9px] px-1 rounded bg-slate-800 text-slate-400">{p.tag}</span>
+              </button>
+            );
+          })}
+        </div>
+      </header>
+
+      {/* Left panel: tools */}
+      <aside className="absolute top-44 left-4 bottom-24 z-10 w-80 overflow-y-auto p-4 rounded-2xl bg-slate-950/85 backdrop-blur-xl border border-slate-800/90 space-y-4 shadow-2xl">
+        <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-widest text-indigo-400 font-bold">Astronomical Object</span>
+            <span className="text-[10px] font-mono text-slate-400">
+              {data?.coordinates.ra_deg}° | {data?.coordinates.dec_deg}°
+            </span>
+          </div>
+          <h2 className="text-sm font-bold text-white mt-1">{data?.object_info.name}</h2>
+          <p className="text-xs text-slate-400">{data?.object_info.type}</p>
+          <div className="mt-2 px-2.5 py-1.5 rounded-lg bg-emerald-950/50 border border-emerald-500/30 text-[11px] text-emerald-300 flex items-center gap-1.5">
+            <Radio className="w-3.5 h-3.5 shrink-0" />
+            <span>{data?.object_info.chem_signature}</span>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-1.5">
+            <Sliders className="w-3 h-3" /> Analysis Modes
+          </span>
+
+          <button onClick={() => setSubtractionMode(!subtractionMode)}
+            className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl border transition ${
+              subtractionMode
+                ? "bg-rose-600/25 border-rose-500 text-rose-200 shadow-lg shadow-rose-900/20"
+                : "bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700"
+            }`}>
+            <span className="flex items-center gap-2"><Eye className="w-4 h-4 text-rose-400" /> Image Subtraction</span>
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/40">{subtractionMode ? "ON" : "OFF"}</span>
+          </button>
+
+          <button onClick={() => setGaiaOverlay(!gaiaOverlay)}
+            className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl border transition ${
+              gaiaOverlay ? "bg-sky-600/20 border-sky-500 text-sky-200" : "bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700"
+            }`}>
+            <span className="flex items-center gap-2"><Layers className="w-4 h-4 text-sky-400" /> Gaia DR3 / WISE Catalog</span>
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/40">{gaiaOverlay ? "ON" : "OFF"}</span>
+          </button>
+
+          <button onClick={() => setShowVectors(!showVectors)}
+            className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl border transition ${
+              showVectors ? "bg-emerald-600/20 border-emerald-500 text-emerald-200" : "bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700"
+            }`}>
+            <span className="flex items-center gap-2"><Compass className="w-4 h-4 text-emerald-400" /> Motion Path</span>
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/40">{showVectors ? "ON" : "OFF"}</span>
+          </button>
+        </div>
+
+        <div className="pt-2 border-t border-slate-800/80">
+          <div className="flex justify-between text-xs mb-1">
+            <span className="text-slate-400">Field of View</span>
+            <span className="font-mono text-indigo-300 font-bold">{fov.toFixed(1)}° × {fov.toFixed(1)}°</span>
+          </div>
+          <input type="range" min="0.5" max="3.0" step="0.5" value={fov}
+            onChange={(e) => setFov(parseFloat(e.target.value))} className="w-full accent-indigo-500" />
+          <p className="text-[10px] text-slate-500 mt-1">A wider field helps track fast objects but loads slower. Press Search to apply.</p>
+        </div>
+
+        <div className="pt-2 border-t border-slate-800/80">
+          <div className="flex items-center justify-between text-xs mb-1.5">
+            <span className="flex items-center gap-1.5 text-slate-300 font-medium">
+              <TrendingUp className="w-3.5 h-3.5 text-emerald-400" /> Light Curve
+            </span>
+            <span className="font-mono text-emerald-300">{currentEpoch.brightness}x</span>
+          </div>
+          <div className="grid grid-cols-4 gap-1.5">
+            {data?.epochs.map((ep, idx) => (
+              <div key={ep.date}
+                onClick={() => { setIsPlaying(false); setEpochIdx(idx); }}
+                className={`p-1.5 rounded-lg border text-center cursor-pointer transition ${
+                  idx === epochIdx ? "bg-indigo-600/30 border-indigo-400" : "bg-slate-900 border-slate-800 hover:border-slate-700"
+                }`}>
+                <div className="text-[9px] text-slate-400">Ep {idx + 1}</div>
+                <div className="text-xs font-mono font-bold text-white">{ep.brightness}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between text-[11px] pt-2 border-t border-slate-800/80 text-slate-400">
+          <span>Data quality:</span>
+          <span className={`flex items-center gap-1 font-mono px-2 py-0.5 rounded ${
+            currentEpoch.contamination_flag === "CLEAN"
+              ? "bg-emerald-950/60 text-emerald-400 border border-emerald-500/30"
+              : "bg-amber-950/60 text-amber-400 border border-amber-500/30"
+          }`}>
+            {currentEpoch.contamination_flag !== "CLEAN" && <AlertTriangle className="w-3 h-3" />}
+            {currentEpoch.contamination_flag}
+          </span>
+        </div>
+      </aside>
+
+      {/* Right panel: spectrum and notes */}
+      <aside className="hidden lg:flex flex-col absolute top-44 right-4 bottom-24 z-10 w-80 overflow-y-auto p-4 rounded-2xl bg-slate-950/85 backdrop-blur-xl border border-slate-800/90 space-y-4 shadow-2xl">
+        <div>
+          <div className="flex items-center justify-between text-xs mb-2">
+            <span className="flex items-center gap-1.5 font-bold text-amber-300 uppercase tracking-wider text-[11px]">
+              <Activity className="w-3.5 h-3.5" /> 102-Band Spectrum
+            </span>
+            <span className="font-mono text-xs text-white bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded">
+              {activeSpectrumPoint?.wavelength} μm
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-1 mb-2">
+            {DETECTOR_ARRAYS.map((det) => {
+              const isSelected = currentDetector.id === det.id;
+              return (
+                <button key={det.id}
+                  onClick={() => setActiveBand(Math.floor((det.bands[0] + det.bands[1]) / 2))}
+                  className={`p-1.5 rounded-lg border text-left transition ${
+                    isSelected ? "bg-amber-500/20 border-amber-400 text-amber-200" : "bg-slate-900/90 border-slate-800 text-slate-400 hover:border-slate-700"
+                  }`}>
+                  <div className="text-[10px] font-bold">{det.name}</div>
+                  <div className="text-[8px] font-mono opacity-80">{det.range}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="text-[10px] text-amber-300/90 bg-amber-950/30 border border-amber-500/20 rounded-lg px-2.5 py-1 mb-2">
+            Features in this range: <strong>{currentDetector.molecule}</strong>
+          </div>
+
+          <div className="relative p-2 rounded-xl bg-slate-900/95 border border-slate-800">
+            <svg viewBox="0 0 260 80" className="w-full h-24 overflow-visible">
+              <polyline fill="none" stroke="#f59e0b" strokeWidth="2" points={svgSpectrumPoints} />
+              <line x1={((activeBand - 1) / 101) * 260} y1="0" x2={((activeBand - 1) / 101) * 260} y2="80"
+                stroke="#38bdf8" strokeWidth="1.5" strokeDasharray="3 3" />
+            </svg>
+            <div className="flex justify-between text-[9px] font-mono text-slate-500 mt-1">
+              <span>0.75 μm (Band 1)</span>
+              <span>Band #{activeBand}</span>
+              <span>5.00 μm (Band 102)</span>
+            </div>
+          </div>
+
+          <input type="range" min="1" max="102" value={activeBand}
+            onChange={(e) => setActiveBand(parseInt(e.target.value))} className="w-full accent-amber-500 mt-2" />
+        </div>
+
+        <div className="pt-3 border-t border-slate-800/80 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-300 flex items-center gap-1.5">
+              <Flag className="w-3.5 h-3.5" /> Discovery Log
+            </span>
+            <button onClick={handleExportReport}
+              className="flex items-center gap-1 text-[10px] px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">
+              <Download className="w-3 h-3" /> JSON report
+            </button>
+          </div>
+
+          <select value={discoveryCategory} onChange={(e) => setDiscoveryCategory(e.target.value)}
+            className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:outline-none">
+            <option>Moving asteroid / NEO</option>
+            <option>Cold brown dwarf</option>
+            <option>Variable / flare star</option>
+            <option>Comet</option>
+          </select>
+
+          <button onClick={handleLogDiscovery}
+            className="w-full py-2 text-xs font-bold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 rounded-xl shadow-lg transition flex items-center justify-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4" /> Save this observation
+          </button>
+
+          <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+            {discoveries.length === 0 && <p className="text-[10px] text-slate-500">No saved observations yet.</p>}
+            {discoveries.map((item) => (
+              <div key={item.id} className="p-2 rounded-lg bg-slate-900/90 border border-slate-800 text-[10px] space-y-0.5">
+                <div className="flex justify-between font-bold text-indigo-300">
+                  <span>{item.id} • {item.category}</span>
+                  <span className="text-slate-400">{item.timestamp}</span>
+                </div>
+                <div className="font-mono text-slate-400">{item.ra}, {item.dec} • Band #{item.band}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </aside>
+
+      {/* Bottom bar: time-lapse controls */}
+      <footer className="absolute bottom-3 left-4 right-4 z-20 px-4 py-3 rounded-2xl bg-slate-950/90 backdrop-blur-xl border border-slate-800/90 flex flex-col sm:flex-row items-center gap-4 shadow-2xl">
+        <div className="flex items-center gap-2">
+          <button onClick={() => setIsPlaying(!isPlaying)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold uppercase tracking-wider transition shadow-lg shadow-indigo-600/25">
+            {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+            {isPlaying ? "Pause" : "Play"}
+          </button>
+
+          <select value={playbackSpeed} onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
+            className="px-2 py-2 text-xs font-mono bg-slate-900 border border-slate-700 rounded-xl text-slate-300">
+            <option value={1400}>0.5x</option>
+            <option value={900}>1.0x</option>
+            <option value={450}>2.0x</option>
+          </select>
+        </div>
+
+        <div className="flex-1 w-full">
+          <div className="flex justify-between text-xs font-mono text-slate-400 mb-1">
+            {data?.epochs.map((ep, i) => (
+              <span key={ep.date}
+                onClick={() => { setIsPlaying(false); setEpochIdx(i); }}
+                className={`cursor-pointer transition ${i === epochIdx ? "text-indigo-400 font-bold" : "hover:text-slate-200"}`}>
+                {ep.date}
+              </span>
+            ))}
+          </div>
+          <input type="range" min="0" max={(data?.epochs.length || 1) - 1} value={epochIdx}
+            onChange={(e) => { setIsPlaying(false); setEpochIdx(parseInt(e.target.value)); }}
+            className="w-full accent-indigo-500" />
+        </div>
+
+        <div className="text-right font-mono text-xs min-w-[160px] bg-slate-900/90 px-3 py-1.5 rounded-xl border border-slate-800">
+          <div className="text-[10px] text-slate-400">Shift on the sky:</div>
+          <div className="text-emerald-400 font-bold">ΔRA: {currentEpoch.dx}" | ΔDec: {currentEpoch.dy}"</div>
+        </div>
+      </footer>
+
+      <AssistantWidget
+        context={`Target: ${presetLabel ?? "custom"}, RA ${ra}, Dec ${dec}, FOV ${fov} deg, band ${activeBand}`}
+      />
+    </div>
+  );
+}
+
+export default function SpherexPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="w-screen h-screen bg-[#02040a] text-indigo-300 flex items-center justify-center font-mono">
+          Loading SPHEREx sky viewer...
+        </div>
+      }
+    >
+      <SpherexExplorerContent />
+    </Suspense>
+  );
+}
